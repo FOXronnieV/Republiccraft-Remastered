@@ -1,0 +1,48 @@
+plugins {
+    id 'java'
+    id 'org.teavm' version '0.14.1'
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
+}
+
+dependencies {
+    compileOnly 'org.teavm:teavm-jso-apis:0.14.1'
+    compileOnly 'org.teavm:teavm-jso:0.14.1'
+    implementation project(':lwjgl-stub')
+    implementation project(':minecraft-core')
+}
+
+// Cấu hình chuẩn xác theo đúng Gradle DSL của TeaVM 0.14+
+teavm {
+    all {
+        mainClass = "net.minecraftweb.client.WebLauncher"
+        outputDir = file("${buildDir}/teavm") // Để mặc định rơi vào build/teavm
+    }
+    js {
+        strict = true
+    }
+    wasmGC {
+        copyRuntime = true
+        disassembly = false
+        obfuscated = true
+    }
+}
+
+tasks.named('build') {
+    dependsOn('copyWasmGCRuntime')
+}
+
+
+// BẬT TỰ ĐỘNG HÓA: Biên dịch xong tự kéo file qua thư mục resources
+tasks.named('generateWasmGC') {
+    doLast {
+        copy {
+            from "${buildDir}/teavm/wasm-gc"
+            into "${projectDir}/src/main/resources/wasm-gc"
+        }
+        println "[Gradle] Đã kéo CẢ CẶP classes.js và web-client.wasm về resources/wasm-gc!"
+    }
+}

@@ -1,0 +1,4 @@
+rootProject.name = 'Republiccraft-Remastered'
+include 'lwjgl-stub'
+include 'minecraft-core'
+include 'web-client'

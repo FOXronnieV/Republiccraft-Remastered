@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Republiccraft Remastered</title>
+    <link rel="icon" href="data:,">
+</head>
+<body>
+    <canvas id="minecraft-canvas" width="854" height="480"></canvas>
+
+    <script>
+        async function runGame() {
+            console.log("[System] Bắt đầu luồng nạp cưỡng chế...");
+            try {
+                // 1. DÙNG DYNAMIC IMPORT ĐỂ CHẮC CHẮN TRÌNH DUYỆT NUỐT ĐƯỢC CÚ PHÁP MODULE (NẾU CÓ)
+                // Thêm đoạn ?v=123 để ép GitHub Codespaces và trình duyệt xóa bỏ hoàn toàn cache 404 cũ
+                const runtimeModule = await import('./wasm-gc/web-client.wasm-runtime.js?v=' + Date.now());
+                console.log("[System] Đã nạp xong file runtime JS!");
+
+                // 2. TÌM KIẾM OBJECT TEAVM TRONG MỌI NGÁCH TRẢ VỀ
+                let coreTeaVM = window.TeaVM || runtimeModule.TeaVM || runtimeModule.default || runtimeModule;
+
+                // Nếu tìm thấy object đóng gói, in ra để anh em mình soi
+                if (coreTeaVM) {
+                    console.log("[System] Đã bắt sống được Object điều khiển chính:", coreTeaVM);
+                    
+                    // Xác định hàm load (.wasm hay .wasmGC)
+                    let wasmLoader = coreTeaVM.wasm || coreTeaVM.wasmGC;
+                    
+                    if (wasmLoader && typeof wasmLoader.load === "function") {
+                        console.log("[System] Phát hiện hàm load! Tiến hành gọi file web-client.wasm...");
+                        
+                        // Kích nổ tiến trình tải file .wasm thực tế
+                        const instance = await wasmLoader.load("wasm-gc/web-client.wasm", {
+                            installImports: true
+                        });
+                        
+                        console.log("[System] Đã kích hoạt core thành công! Kiểm tra game chạy...");
+                        return;
+                    }
+                }
+                
+                // 3. PHƯƠNG ÁN DỰ PHÒNG CUỐI CÙNG: 
+                // Nếu nạp module thành công mà object vẫn rỗng, có thể bản TeaVM này tự khởi chạy 
+                // ngay khi import. Kiểm tra tab Network xem file .wasm có tự load lên không!
+                console.log("[System] Không thấy hàm gọi tay. Đang đợi xem file .wasm có tự động load ngầm không...");
+
+            } catch (err) {
+                console.error("[Lỗi Chí Mạng] Trình duyệt từ chối đọc file runtime JS:", err);
+                console.error("Gợi ý: Hãy chắc chắn ông đã chạy lệnh './gradlew clean build' sau khi sửa target=BROWSER!");
+            }
+        }
+
+        // Chạy ngay lập tức
+        runGame();
+    </script>
+</body>
+</html>

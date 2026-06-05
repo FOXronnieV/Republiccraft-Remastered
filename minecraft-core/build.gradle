@@ -1,0 +1,16 @@
+plugins {
+    id 'java'
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
+}
+
+dependencies {
+    // Để module core hiểu được các Annotation của TeaVM như @JSBody
+    compileOnly 'org.teavm:teavm-jso-apis:0.14.1'
+    compileOnly 'org.teavm:teavm-jso:0.14.1'
+
+    implementation project(':lwjgl-stub')
+}

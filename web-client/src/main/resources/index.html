@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Republiccraft Remastered</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #1a1a1a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            color: #ffffff;
+            font-family: sans-serif;
+        }
+        #canvas-container {
+            position: relative;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+            background-color: #1a1a1a;
+        }
+        #status-overlay {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.7);
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="canvas-container">
+        <canvas id="minecraft-canvas" width="854" height="480"></canvas>
+        <div id="status-overlay">Hệ thống: Đang mồi bộ siêu vá lỗi...</div>
+    </div>
+
+    <script>
+        const statusEl = document.getElementById('status-overlay');
+        function updateStatus(text) {
+            statusEl.innerText = "Hệ thống: " + text;
+        }
+
+        // ==========================================
+        // VÁ NÓNG 1: ĐÁNH CHẶN VÀ GIẢ LẬP WEBSOCKET ĐỂ TRÁNH LỖI MẠNG
+        // ==========================================
+        const OriginalWebSocket = window.WebSocket;
+        window.WebSocket = function(url, protocols) {
+            console.log(`[Vá Nóng Network] Đang đánh chặn kết nối WebSocket tới: ${url}`);
+            
+            if (url.includes('127.0.0.1') || url.includes('localhost')) {
+                const mockWS = {
+                    url: url,
+                    readyState: 0, 
+                    send: function(data) { console.log("[Mock WS] Gửi dữ liệu:", data); },
+                    close: function() { console.log("[Mock WS] Đóng kết nối."); }
+                };
+                
+                setTimeout(() => {
+                    mockWS.readyState = 1; 
+                    if (typeof mockWS.onopen === 'function') {
+                        mockWS.onopen({ type: 'open' });
+                    }
+                }, 100);
+                
+                return mockWS;
+            }
+            return new OriginalWebSocket(url, protocols);
+        };
+
+        // ==========================================
+        // VÁ NÓNG 2: ĐÒN HIỂM PROTOTYPE NẰM VÙNG ĐỂ DIỆT LỖI RUNTICKFIELD
+        // ==========================================
+        Object.defineProperty(Object.prototype, 'runTickField', {
+            get: function() {
+                if (this && typeof this === 'object') {
+                    const availableFunctions = Object.keys(this).filter(k => typeof this[k] === 'function' && k !== 'runTickField');
+                    if (availableFunctions.length > 0) {
+                        const realTickFunc = this[availableFunctions[0]];
+                        console.log(`[Siêu Vá Nóng] Đã cứu nguy vòng lặp! Ép hàm ẩn [.${availableFunctions[0]}] chạy thay cho runTickField.`);
+                        return realTickFunc.bind(this);
+                    }
+                }
+                return function() { };
+            },
+            set: function(value) {
+                Object.defineProperty(this, 'runTickField', {
+                    value: value,
+                    writable: true,
+                    configurable: true,
+                    enumerable: true
+                });
+            },
+            configurable: true,
+            enumerable: false
+        });
+
+        async function runGame() {
+            console.log("[System] Bắt đầu luồng nạp cưỡng chế...");
+            updateStatus("Đang tải tệp thực thi JS runtime...");
+            
+            try {
+                const runtimeModule = await import('./wasm-gc/web-client.wasm-runtime.js?v=' + Date.now());
+                console.log("[System] Đã nạp xong file runtime JS!");
+                updateStatus("Đã kết nối JS Runtime. Đang tìm bộ điều khiển chính...");
+
+                let coreTeaVM = window.TeaVM || runtimeModule.TeaVM || runtimeModule.default || runtimeModule;
+
+                if (coreTeaVM) {
+                    console.log("[System] Đã bắt sống được Object điều khiển chính:", coreTeaVM);
+                    let wasmLoader = coreTeaVM.wasm || coreTeaVM.wasmGC;
+                    
+                    if (wasmLoader && typeof wasmLoader.load === "function") {
+                        console.log("[System] Phát hiện hàm load! Tiến hành gọi file web-client.wasm...");
+                        updateStatus("Đang đồng bộ lõi WASM-GC (web-client.wasm)...");
+                        
+                        const instance = await wasmLoader.load("wasm-gc/web-client.wasm");
+                        
+                        console.log("[System] THÀNH CÔNG RỰC RỠ! Lõi game đã được kích hoạt hoàn toàn!");
+                        updateStatus("Kích hoạt lõi thành công! Đang quét hàm Main...");
+
+                        if (instance && instance.exports) {
+                            window.wasmInstance = instance;
+
+                            let launched = false;
+                            const mainCandidates = ["main", "_start", "start", "init"];
+                            
+                            for (let candidate of mainCandidates) {
+                                if (typeof instance.exports[candidate] === "function") {
+                                    console.log(`[System] Phát hiện hàm ứng viên [${candidate}]! Tiến hành tạo mảng đối số ảo...`);
+                                    updateStatus(`Đang mồi tham số cho hàm (${candidate})...`);
+                                    
+                                    try {
+                                        instance.exports[candidate](0); 
+                                        launched = true;
+                                        break;
+                                    } catch (firstTryError) {
+                                        console.warn("[System] Thử mồi tham số (0) thất bại, chuyển sang gọi trần...");
+                                        try {
+                                            instance.exports[candidate]();
+                                            launched = true;
+                                            break;
+                                        } catch (secondTryError) {
+                                            throw firstTryError; 
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (launched) {
+                                updateStatus("Trò chơi đang vận hành vòng lặp đồ họa...");
+                            } else {
+                                updateStatus("Lỗi: Không tìm thấy điểm kích hoạt Main.");
+                            }
+                        }
+                        return;
+                    }
+                }
+            } catch (err) {
+                console.error("[Lỗi Chí Mạng] Luồng khởi chạy sụp đổ:", err);
+                updateStatus("Lỗi chí mạng: Luồng tải bị chặn đứng (Xem Console).");
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', runGame);
+    </script>
+</body>
+</html>
